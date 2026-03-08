@@ -55,7 +55,7 @@ local function htmlToMarkdown(html, baseUrl)
     text = text:gsub('<a.-href="([^"]+)".->(.-)</a>', function(href, content)
         if not href:find("^http") then
             if href:find("^/") then
-                href = baseUrl:match("(https?://.-)/") .. href
+                href = baseUrl:match("(https?://[^/]+)") .. href
             else
                 href = baseUrl .. href
             end
@@ -269,29 +269,29 @@ end
 local function parseWikiLinks(text, wikiConfig)
     if not text then return "" end
     -- [[Page|Label]] or [[Page]]
-    return text:gsub("%[%[([^%]|]+)%|?([^%]]*)%]%]", function(page, label)
+    return (text:gsub("%[%[([^%]|]+)%|?([^%]]*)%]%]", function(page, label)
         local display = (label ~= "" and label) or page
         local canonical = findCanonicalTitle(page, wikiConfig) or page
         local parts = {}
         for part in canonical:gmatch("[^:]+") do
-            table.insert(parts, utils.url_encode(part:gsub(" ", "_")))
+            table.insert(parts, utils.url_path_encode(part:gsub(" ", "_")))
         end
         local url = wikiConfig.articlePath .. table.concat(parts, ":")
         return "[**" .. display .. "**](<" .. url .. ">)"
-    end)
+    end))
 end
 
 local function parseTemplates(text, wikiConfig)
     if not text then return "" end
     -- {{Template|Param}}
-    return text:gsub("{{([^%|%s}]+)%|?([^}]*)}}", function(templateName, param)
+    return (text:gsub("{{([^%|%s}]+)%|?([^}]*)}}", function(templateName, param)
         local canonical = findCanonicalTitle(templateName, wikiConfig)
         if not canonical then return "I don't know." end
 
         local content = getLeadSection(canonical, wikiConfig)
         local parts = {}
         for part in canonical:gmatch("[^:]+") do
-            table.insert(parts, utils.url_encode(part:gsub(" ", "_")))
+            table.insert(parts, utils.url_path_encode(part:gsub(" ", "_")))
         end
         local url = wikiConfig.articlePath .. table.concat(parts, ":")
 
@@ -300,7 +300,7 @@ local function parseTemplates(text, wikiConfig)
         else
             return "I don't know."
         end
-    end)
+    end))
 end
 
 return {

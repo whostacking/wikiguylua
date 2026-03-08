@@ -1,6 +1,9 @@
 local discordia = require('discordia')
 local client = discordia.Client()
 
+-- Seed the RNG
+math.randomseed(os.time())
+
 local config = require('./config')
 local presence = require('./functions/presence')
 local interactions = require('./functions/interactions')
@@ -8,10 +11,16 @@ local commands_lib = require('./functions/commands')
 local server = require('./functions/server')
 
 -- Handle interactions (slash commands)
--- We'll assume the user will set up these deps as instructed or provide them in a known way
--- But for the source code, we use standard Discordia and any extensions they use.
-local slash = pcall(require, 'discordia-slash')
-local inter = pcall(require, 'discordia-interactions')
+local has_slash, slash = pcall(require, 'discordia-slash')
+local has_inter, inter = pcall(require, 'discordia-interactions')
+
+if has_slash then
+    -- Note: discordia-slash usually requires being called with the client
+    -- or it patches the Client class.
+    if type(slash) == "function" then
+        slash(client)
+    end
+end
 
 if client.useApplicationCommands then
     client:useApplicationCommands()
@@ -26,10 +35,23 @@ client:on('ready', function()
 
     -- Register slash commands
     print("Registering slash commands...")
+    local success_count = 0
+    local fail_count = 0
     for _, cmd in ipairs(commands_lib.commands) do
-        pcall(function() client:createGlobalApplicationCommand(cmd) end)
+        local ok, err = pcall(function() return client:createGlobalApplicationCommand(cmd) end)
+        if ok then
+            success_count = success_count + 1
+        else
+            print("Failed to register command '" .. cmd.name .. "': " .. tostring(err))
+            fail_count = fail_count + 1
+        end
     end
-    print("✅ Registered slash commands.")
+
+    if fail_count == 0 then
+        print("✅ Registered slash commands (" .. success_count .. " total).")
+    else
+        print("Registered slash commands with issues: " .. success_count .. " success, " .. fail_count .. " failures.")
+    end
 
     server.startServer()
 end)
@@ -80,18 +102,15 @@ client:on('messageCreate', function(message)
             wikiConfig = config.WIKIS[PREFIX_WIKI_MAP[prefix]]
         else
             local channel = message.channel
-            local parentId = channel.parentId
-            local wikiKey = config.CATEGORY_WIKI_MAP[parentId] or "superstar-racers"
+            local categoryID = channel.categoryID
+            local wikiKey = config.CATEGORY_WIKI_MAP[categoryID] or "superstar-racers"
             wikiConfig = config.WIKIS[wikiKey]
         end
 
         if wikiConfig then
             local response = interactions.handleUserRequest(wikiConfig, pageName, message)
             if response and response.id then
-                interactions.responseMap[message.id] = response.id
-                interactions.botToAuthorMap[response.id] = message.author.id
-                interactions.pruneMap(interactions.responseMap)
-                interactions.pruneMap(interactions.botToAuthorMap)
+                interactions.trackResponse(message.id, response.id, message.author.id)
             end
         end
     end
@@ -110,7 +129,7 @@ client:on('messageUpdate', function(message)
         if prefix and PREFIX_WIKI_MAP[prefix] then
             wikiConfig = config.WIKIS[PREFIX_WIKI_MAP[prefix]]
         else
-            local wikiKey = config.CATEGORY_WIKI_MAP[message.channel.parentId] or "superstar-racers"
+            local wikiKey = config.CATEGORY_WIKI_MAP[message.channel.categoryID] or "superstar-racers"
             wikiConfig = config.WIKIS[wikiKey]
         end
 

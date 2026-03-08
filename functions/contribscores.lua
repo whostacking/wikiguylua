@@ -27,23 +27,28 @@ local function getContributionScores(wikiConfig)
         }
     end
 
-    -- Basic parsing (Lua's regex is limited, so we do what we can)
+    -- Improved parsing
     local userData = {}
-    for row in html:gmatch('<tr class="">(.-)</tr>') do
-        local user = row:match('<bdi>(.-)</bdi>') or "Unknown"
+    for row in html:gmatch('<tr[^>]*>(.-)</tr>') do
+        local user = row:match('<bdi>(.-)</bdi>')
 
-        local stats = {}
-        for stat in row:gmatch('>([%d,]+)%s*</td>') do
-            table.insert(stats, stat)
+        if user then
+            local stats = {}
+            for stat in row:gmatch('>([%d,]+)%s*</td>') do
+                table.insert(stats, stat)
+            end
+
+            local score = stats[2] and stats[2]:gsub(",", "") or "0"
+            local edits = stats[4] or "0"
+
+            table.insert(userData, { user = user, score = score, edits = edits })
         end
-
-        local score = stats[2] and stats[2]:gsub(",", "") or "0"
-        local edits = stats[4] or "0"
-
-        table.insert(userData, { user = user, score = score, edits = edits })
     end
 
     if #userData == 0 then
+        if html ~= "" then
+            print("Warning: HTML was non-empty but no rows were found in contrib scores parsing.")
+        end
         return {
             title = "Special:ContributionScores",
             result = "No content available."
@@ -63,7 +68,8 @@ local function getContributionScores(wikiConfig)
     for i, data in ipairs(userData) do
         local paddedScore = string.rep(" ", maxScoreLength - #data.score) .. data.score
         local paddedEdits = string.rep(" ", maxEditLength - #data.edits) .. data.edits
-        dataSummary = dataSummary .. i .. ". <:playerpoint:1472433775593000961> `" .. paddedScore .. "`    ✏️ `" .. paddedEdits .. "`    **[@" .. data.user .. "](" .. wikiConfig.articlePath .. "User:" .. data.user .. ")**\n"
+        local encodedUser = utils.url_encode(data.user)
+        dataSummary = dataSummary .. i .. ". <:playerpoint:1472433775593000961> `" .. paddedScore .. "`    ✏️ `" .. paddedEdits .. "`    **[@" .. data.user .. "](" .. wikiConfig.articlePath .. "User:" .. encodedUser .. ")**\n"
         if i >= 10 then break end
     end
 
@@ -73,12 +79,23 @@ local function getContributionScores(wikiConfig)
     }
 end
 
-local function handleContribScoresRequest(interaction, params)
-    local wikiKey = interaction.data.options[1].options[1].value
-    local wikiConfig = config.WIKIS[wikiKey]
+local function handleContribScoresRequest(interaction)
+    local data = interaction.data
+    local options = data and data.options
+    local wikiKey
 
+    if options and options[1] and options[1].options and options[1].options[1] then
+        wikiKey = options[1].options[1].value
+    end
+
+    if not wikiKey then
+        interaction:reply({ content = 'Invalid command options.', ephemeral = true })
+        return
+    end
+
+    local wikiConfig = config.WIKIS[wikiKey]
     if not wikiConfig then
-        interaction:reply({ content = 'Unknown wiki selection.', ephemeral = true })
+        interaction:reply({ content = 'Unknown wiki selection: ' .. tostring(wikiKey), ephemeral = true })
         return
     end
 
@@ -88,7 +105,6 @@ local function handleContribScoresRequest(interaction, params)
     if result.error then
         interaction:reply({ content = result.error })
     else
-        -- Using a simple embed for now since Discordia doesn't have ContainerBuilder built-in
         interaction:reply({
             embed = {
                 title = result.title,

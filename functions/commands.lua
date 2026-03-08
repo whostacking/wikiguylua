@@ -1,7 +1,14 @@
 local config = require('../config')
 
+local wikiKeys = {}
+for key in pairs(config.WIKIS) do
+    table.insert(wikiKeys, key)
+end
+table.sort(wikiKeys)
+
 local wikiChoices = {}
-for key, wiki in pairs(config.WIKIS) do
+for _, key in ipairs(wikiKeys) do
+    local wiki = config.WIKIS[key]
     table.insert(wikiChoices, {
         name = wiki.name,
         value = key

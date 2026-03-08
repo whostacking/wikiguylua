@@ -2,7 +2,7 @@ local http = require('http')
 local json = require('json')
 
 local function startServer()
-    local port = os.getenv("PORT") or 3000
+    local port = tonumber(os.getenv("PORT")) or 3000
 
     http.createServer("0.0.0.0", port, function (req, res)
         if req.url == "/" then
@@ -21,6 +21,10 @@ local function startServer()
       </body>
     </html>
 ]]
+            res:writeHead(200, {
+                ["Content-Type"] = "text/html",
+                ["Content-Length"] = #body
+            })
             res:finish(body)
         elseif req.url == "/status" then
             local data = {
@@ -29,9 +33,19 @@ local function startServer()
                 runtime = 'Lua/Discordia',
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }
-            res:finish(json.encode(data))
+            local body = json.encode(data)
+            res:writeHead(200, {
+                ["Content-Type"] = "application/json",
+                ["Content-Length"] = #body
+            })
+            res:finish(body)
         else
-            res:finish("Not Found")
+            local body = "Not Found"
+            res:writeHead(404, {
+                ["Content-Type"] = "text/plain",
+                ["Content-Length"] = #body
+            })
+            res:finish(body)
         end
     end):listen()
 

@@ -7,8 +7,7 @@ return {
     "SinisterRectus/discordia",
     "luvit/coro-http",
     "luvit/json",
-    -- Note: Bilal2453/discordia-interactions and GitSparTV/discordia-slash
-    -- are needed for slash commands but may need to be installed manually
-    -- if not on lit.
+    "Bilal2453/discordia-interactions",
+    "GitSparTV/discordia-slash",
   }
 }

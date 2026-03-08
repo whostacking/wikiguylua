@@ -27,13 +27,27 @@ local function fetch(url, options)
     }
 end
 
+-- For query/form values (spaces to '+')
 local function url_encode(str)
     if str then
+        str = tostring(str)
         str = str:gsub("\n", "\r\n")
         str = str:gsub("([^%w %-%_%.%~])", function(c)
             return ("%%%02X"):format(string.byte(c))
         end)
         str = str:gsub(" ", "+")
+    end
+    return str
+end
+
+-- For URL path segments (spaces to '%20')
+local function url_path_encode(str)
+    if str then
+        str = tostring(str)
+        str = str:gsub("([^%w %-%_%.%~])", function(c)
+            return ("%%%02X"):format(string.byte(c))
+        end)
+        str = str:gsub(" ", "%%20")
     end
     return str
 end
@@ -50,5 +64,6 @@ end
 return {
     fetch = fetch,
     url_encode = url_encode,
+    url_path_encode = url_path_encode,
     build_query = build_query
 }

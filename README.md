@@ -5,3 +5,20 @@
   <a href="https://discord.com/oauth2/authorize?client_id=1472272697798037524">Add to server</a> | <a href="https://github.com/conecorp/wikiguy/wiki">Bot documentation</a>
 <br>ദ്ദി◝ ⩊ ◜.ᐟ
 </p>
+
+## Installation
+
+This bot runs on the [Luvit](https://luvit.io) runtime.
+
+1. Install Luvit and Lit:
+   ```bash
+   curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+   ```
+2. Install dependencies:
+   ```bash
+   ./lit install
+   ```
+3. Run the bot:
+   ```bash
+   ./luvit main.lua
+   ```

@@ -51,9 +51,15 @@ local function handleFileRequest(wikiConfig, fileName, interaction)
 
     local isPictureOrVideo = mime:find("^image/") or mime:find("^video/")
 
+    local parts = {}
+    for part in title:gmatch("[^:]+") do
+        table.insert(parts, utils.url_path_encode(part:gsub(" ", "_")))
+    end
+    local pageLink = wikiConfig.articlePath .. table.concat(parts, ":")
+
     local embed = {
         title = title,
-        url = wikiConfig.articlePath .. title:gsub(" ", "_"),
+        url = pageLink,
         color = 0xff6600
     }
 

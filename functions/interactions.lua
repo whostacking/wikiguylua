@@ -8,18 +8,22 @@ local utils = require("./utils")
 
 local responseMap = {}
 local botToAuthorMap = {}
+local mapOrder = {}
 
-local function pruneMap(map, maxSize)
+local function pruneMap(maxSize)
     maxSize = maxSize or 1000
-    local count = 0
-    local keys = {}
-    for k in pairs(map) do
-        count = count + 1
-        table.insert(keys, k)
+    while #mapOrder > maxSize do
+        local oldestKey = table.remove(mapOrder, 1)
+        responseMap[oldestKey] = nil
+        botToAuthorMap[oldestKey] = nil
     end
-    if count > maxSize then
-        map[keys[1]] = nil
-    end
+end
+
+local function trackResponse(userMsgId, botMsgId, authorId)
+    responseMap[userMsgId] = botMsgId
+    botToAuthorMap[botMsgId] = authorId
+    table.insert(mapOrder, userMsgId)
+    pruneMap()
 end
 
 local function fetchWikiChoices(wikiConfig, params, listKey, isFileSearch)
@@ -106,15 +110,21 @@ local function getAutocompleteChoices(wikiConfig, listType, prefix)
     return finalChoices
 end
 
-local function buildPageEmbed(title, content, imageUrl, wikiConfig)
-    local url = wikiConfig.articlePath .. title:gsub(" ", "_")
+local function buildPageEmbed(title, content, imageUrl, wikiConfig, canonicalTarget)
+    local target = canonicalTarget or title
+    local parts = {}
+    for part in target:gmatch("[^:]+") do
+        table.insert(parts, utils.url_path_encode(part:gsub(" ", "_")))
+    end
+    local url = wikiConfig.articlePath .. table.concat(parts, ":")
+
     return {
         title = title,
         description = content,
         url = url,
         color = 0xff6600,
         thumbnail = { url = imageUrl or "https://upload.wikimedia.org/wikipedia/commons/8/89/HD_transparent_picture.png" },
-        footer = { text = wikiConfig.name, icon_url = "https://upload.wikimedia.org/wikipedia/commons/8/89/HD_transparent_picture.png" }
+        footer = { text = wikiConfig.name }
     }
 end
 
@@ -162,7 +172,7 @@ local function handleUserRequest(wikiConfig, rawPageName, messageOrInteraction, 
 
     if canonical then
         content = content or "No content available."
-        local embed = buildPageEmbed(displayTitle, content:sub(1, 1000), imageUrl, wikiConfig)
+        local embed = buildPageEmbed(displayTitle, content:sub(1, 1000), imageUrl, wikiConfig, canonical)
 
         if botMessageToEdit then
             return botMessageToEdit:edit({ embed = embed })
@@ -177,7 +187,7 @@ local function handleUserRequest(wikiConfig, rawPageName, messageOrInteraction, 
         return response
     else
         local msg = 'Page "' .. rawPageName .. '" not found on [' .. wikiConfig.name .. ' Wiki](<' .. wikiConfig.baseUrl .. '>).'
-        if messageOrInteraction.reply then
+        if not botMessageToEdit and messageOrInteraction.reply then
             messageOrInteraction:reply({ content = msg, ephemeral = true })
         end
     end
@@ -276,5 +286,5 @@ return {
     buildPageEmbed = buildPageEmbed,
     responseMap = responseMap,
     botToAuthorMap = botToAuthorMap,
-    pruneMap = pruneMap
+    trackResponse = trackResponse
 }
