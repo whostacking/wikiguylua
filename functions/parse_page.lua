@@ -57,15 +57,21 @@ local function htmlToMarkdown(html, baseUrl)
 
     -- Links
     text = text:gsub('<a.-href="([^"]+)".->(.-)</a>', function(href, content)
+        local finalHref = href
         if not href:find("^http") then
             if href:find("^/") then
-                href = baseUrl:match("(https?://[^/]+)") .. href
+                local domain = baseUrl:match("(https?://[^/]+)")
+                finalHref = domain .. href
             else
-                href = baseUrl .. href
+                local base = baseUrl
+                if base:sub(-1) ~= "/" then
+                    base = base .. "/"
+                end
+                finalHref = base .. href:gsub("^%./", "")
             end
         end
         local cleanContent = content:gsub("<[^>]+>", ""):gsub("%[", "\\["):gsub("%]", "\\]")
-        return "[" .. cleanContent .. "](<" .. href .. ">)"
+        return "[" .. cleanContent .. "](<" .. finalHref .. ">)"
     end)
 
     -- Lists
@@ -125,9 +131,11 @@ local function findCanonicalTitle(input, wikiConfig)
 
     if page and not page.missing then
         local canonical = page.title
-        CANONICAL_CACHE[cacheKey] = canonical
-        table.insert(CANONICAL_ORDER, cacheKey)
-        pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
+        if not CANONICAL_CACHE[cacheKey] then
+            CANONICAL_CACHE[cacheKey] = canonical
+            table.insert(CANONICAL_ORDER, cacheKey)
+            pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
+        end
         return canonical
     end
 
@@ -146,9 +154,11 @@ local function findCanonicalTitle(input, wikiConfig)
         local topResult = json_data.query and json_data.query.search and json_data.query.search[1]
         if topResult then
             local canonical = topResult.title
-            CANONICAL_CACHE[cacheKey] = canonical
-            table.insert(CANONICAL_ORDER, cacheKey)
-            pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
+            if not CANONICAL_CACHE[cacheKey] then
+                CANONICAL_CACHE[cacheKey] = canonical
+                table.insert(CANONICAL_ORDER, cacheKey)
+                pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
+            end
             return canonical
         end
     end
@@ -204,10 +214,15 @@ local function getPageData(input, wikiConfig)
 
     local data = { extract = extract, imageUrl = imageUrl }
     local pageCacheKey = wikiKey .. ":" .. canonical
-    CANONICAL_CACHE[cacheKey] = canonical
-    table.insert(CANONICAL_ORDER, cacheKey)
-    PAGE_DATA_CACHE[pageCacheKey] = data
-    table.insert(PAGE_DATA_ORDER, pageCacheKey)
+
+    if not CANONICAL_CACHE[cacheKey] then
+        CANONICAL_CACHE[cacheKey] = canonical
+        table.insert(CANONICAL_ORDER, cacheKey)
+    end
+    if not PAGE_DATA_CACHE[pageCacheKey] then
+        PAGE_DATA_CACHE[pageCacheKey] = data
+        table.insert(PAGE_DATA_ORDER, pageCacheKey)
+    end
 
     pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
     pruneCacheFIFO(PAGE_DATA_CACHE, PAGE_DATA_ORDER)
@@ -236,7 +251,8 @@ local function getSectionIndex(pageTitle, sectionName, wikiConfig)
         if cleanLine:lower() == sectionName:lower() then
             return {
                 index = s.index,
-                line = cleanLine
+                line = cleanLine,
+                canonicalTitle = canonical
             }
         end
     end
@@ -251,7 +267,7 @@ local function getSectionContent(pageTitle, sectionName, wikiConfig)
         action = "parse",
         format = "json",
         prop = "text",
-        page = pageTitle,
+        page = sectionInfo.canonicalTitle or pageTitle,
         section = sectionInfo.index
     }
 
@@ -276,7 +292,7 @@ end
 
 local function parseWikiLinks(text, wikiConfig)
     if not text then return "" end
-    return (text:gsub("%[%[([^%]|]+)%|?([^%]]*)%]%]", function(page, label)
+    return (text:gsub("%%[%%[([^%%]|]+)%%|?([^%%]]*)%%]%%]", function(page, label)
         local display = (label ~= "" and label) or page
         local canonical = findCanonicalTitle(page, wikiConfig) or page
         local parts = {}
@@ -290,7 +306,7 @@ end
 
 local function parseTemplates(text, wikiConfig)
     if not text then return "" end
-    return (text:gsub("{{([^%|%s}]+)%|?([^}]*)}}", function(templateName, param)
+    return (text:gsub("{{([^%%|%%s}]+)%%|?([^}]*)}}", function(templateName, param)
         local canonical = findCanonicalTitle(templateName, wikiConfig)
         if not canonical then return "I don't know." end
 
