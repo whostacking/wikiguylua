@@ -34,7 +34,7 @@ local function getContributionScores(wikiConfig)
 
         if user then
             local stats = {}
-            for stat in row:gmatch('>([%%d,]+)%%s*</td>') do
+            for stat in row:gmatch('>([%d,]+)%s*</td>') do
                 table.insert(stats, stat)
             end
 

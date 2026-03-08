@@ -1,6 +1,6 @@
 local utils = require("./utils")
 
-local function handleFileRequest(wikiConfig, fileName, interaction)
+local function handleFileRequest(wikiConfig, fileName, messageOrInteraction)
     local searchTitle = fileName
     if not fileName:lower():find("^file:") then
         searchTitle = "File:" .. fileName
@@ -15,32 +15,53 @@ local function handleFileRequest(wikiConfig, fileName, interaction)
         redirects = 1
     }
 
-    interaction:acknowledge()
+    local isInteraction = messageOrInteraction.acknowledge ~= nil
+    if isInteraction then
+        messageOrInteraction:acknowledge()
+    end
 
     local url = wikiConfig.apiEndpoint .. "?" .. utils.build_query(params)
     local res = utils.fetch(url)
 
     if not res.ok then
-        interaction:reply({ content = "Error fetching file info.", ephemeral = true })
+        if isInteraction then
+            messageOrInteraction:reply({ content = "Error fetching file info.", ephemeral = true })
+        else
+            messageOrInteraction:reply({ content = "Error fetching file info." })
+        end
         return
     end
 
     local json_data = res.json()
     local pages = json_data.query and json_data.query.pages
     if not pages then
-        interaction:reply({ content = "File not found.", ephemeral = true })
+        if isInteraction then
+            messageOrInteraction:reply({ content = "File not found.", ephemeral = true })
+        else
+            messageOrInteraction:reply({ content = "File not found." })
+        end
         return
     end
 
     local _, page = next(pages)
     if page.missing then
-        interaction:reply({ content = 'File "' .. fileName .. '" not found on [' .. wikiConfig.name .. '](<' .. wikiConfig.baseUrl .. '>).', ephemeral = true })
+        local msg = 'File "' .. fileName .. '" not found on [' .. wikiConfig.name .. '](<' .. wikiConfig.baseUrl .. '>).'
+        if isInteraction then
+            messageOrInteraction:reply({ content = msg, ephemeral = true })
+        else
+            messageOrInteraction:reply({ content = msg })
+        end
         return
     end
 
     local info = page.imageinfo and page.imageinfo[1]
     if not info then
-        interaction:reply({ content = "Could not retrieve file information.", ephemeral = true })
+        local msg = "Could not retrieve file information."
+        if isInteraction then
+            messageOrInteraction:reply({ content = msg, ephemeral = true })
+        else
+            messageOrInteraction:reply({ content = msg })
+        end
         return
     end
 
@@ -68,7 +89,7 @@ local function handleFileRequest(wikiConfig, fileName, interaction)
         embed.description = "[Download File](" .. fileUrl .. ")"
     end
 
-    interaction:reply({
+    messageOrInteraction:reply({
         embed = embed
     })
 end

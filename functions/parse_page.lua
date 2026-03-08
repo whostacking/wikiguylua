@@ -276,7 +276,7 @@ end
 
 local function parseWikiLinks(text, wikiConfig)
     if not text then return "" end
-    return (text:gsub("%%[%%[([^%%]|]+)%%|?([^%%]]*)%%]%%]", function(page, label)
+    return (text:gsub("%[%[([^%]|]+)%|?([^%]]*)%]%]", function(page, label)
         local display = (label ~= "" and label) or page
         local canonical = findCanonicalTitle(page, wikiConfig) or page
         local parts = {}
@@ -290,7 +290,7 @@ end
 
 local function parseTemplates(text, wikiConfig)
     if not text then return "" end
-    return (text:gsub("{{([^%%|%%s}]+)%%|?([^}]*)}}", function(templateName, param)
+    return (text:gsub("{{([^%|%s}]+)%|?([^}]*)}}", function(templateName, param)
         local canonical = findCanonicalTitle(templateName, wikiConfig)
         if not canonical then return "I don't know." end
 
