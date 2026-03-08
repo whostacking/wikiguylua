@@ -1,20 +1,16 @@
 local utils = require("./utils")
-local config = require("../config")
 
 -- --- CACHING ---
 local CANONICAL_CACHE = {}
+local CANONICAL_ORDER = {}
 local PAGE_DATA_CACHE = {}
+local PAGE_DATA_ORDER = {}
 local MAX_CACHE_SIZE = 500
 
-local function pruneCache(cache)
-    local count = 0
-    local keys = {}
-    for k in pairs(cache) do
-        count = count + 1
-        table.insert(keys, k)
-    end
-    if count > MAX_CACHE_SIZE then
-        cache[keys[1]] = nil
+local function pruneCacheFIFO(cache, order)
+    while #order > MAX_CACHE_SIZE do
+        local oldestKey = table.remove(order, 1)
+        cache[oldestKey] = nil
     end
 end
 
@@ -22,7 +18,6 @@ end
 local function getFullSizeImageUrl(url)
     if not url or not url:find('/thumb/') then return url end
 
-    -- Very simple replacement for MediaWiki thumbnail URLs
     local newUrl = url:gsub("/thumb/", "/")
     local lastSlash = newUrl:match(".*/()")
     if lastSlash then
@@ -37,13 +32,22 @@ local function htmlToMarkdown(html, baseUrl)
 
     local text = html
 
-    -- Remove unwanted elements
-    text = text:gsub("<style.-</style>", "")
-    text = text:gsub("<script.-</script>", "")
-    text = text:gsub("<table.-</table>", "")
-    text = text:gsub("<div class=\"infobox\".-</div>", "")
-    text = text:gsub("<div class=\"navbox\".-</div>", "")
-    text = text:gsub("<sup class=\"reference\".-</sup>", "")
+    -- Remove unwanted elements repeatedly to handle nesting
+    local patterns = {
+        "<style.-</style>",
+        "<script.-</script>",
+        "<table.-</table>",
+        "<div class=\"infobox\".-</div>",
+        "<div class=\"navbox\".-</div>",
+        "<sup class=\"reference\".-</sup>"
+    }
+
+    for _, pattern in ipairs(patterns) do
+        local count
+        repeat
+            text, count = text:gsub(pattern, "")
+        until count == 0
+    end
 
     -- Formatting
     text = text:gsub("<b>(.-)</b>", "**%1**")
@@ -122,7 +126,8 @@ local function findCanonicalTitle(input, wikiConfig)
     if page and not page.missing then
         local canonical = page.title
         CANONICAL_CACHE[cacheKey] = canonical
-        pruneCache(CANONICAL_CACHE)
+        table.insert(CANONICAL_ORDER, cacheKey)
+        pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
         return canonical
     end
 
@@ -142,7 +147,8 @@ local function findCanonicalTitle(input, wikiConfig)
         if topResult then
             local canonical = topResult.title
             CANONICAL_CACHE[cacheKey] = canonical
-            pruneCache(CANONICAL_CACHE)
+            table.insert(CANONICAL_ORDER, cacheKey)
+            pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
             return canonical
         end
     end
@@ -197,10 +203,14 @@ local function getPageData(input, wikiConfig)
     local imageUrl = getFullSizeImageUrl(page.thumbnail and page.thumbnail.source or nil)
 
     local data = { extract = extract, imageUrl = imageUrl }
+    local pageCacheKey = wikiKey .. ":" .. canonical
     CANONICAL_CACHE[cacheKey] = canonical
-    PAGE_DATA_CACHE[wikiKey .. ":" .. canonical] = data
-    pruneCache(CANONICAL_CACHE)
-    pruneCache(PAGE_DATA_CACHE)
+    table.insert(CANONICAL_ORDER, cacheKey)
+    PAGE_DATA_CACHE[pageCacheKey] = data
+    table.insert(PAGE_DATA_ORDER, pageCacheKey)
+
+    pruneCacheFIFO(CANONICAL_CACHE, CANONICAL_ORDER)
+    pruneCacheFIFO(PAGE_DATA_CACHE, PAGE_DATA_ORDER)
 
     return { canonical = canonical, extract = extract, imageUrl = imageUrl }
 end
@@ -253,8 +263,6 @@ local function getSectionContent(pageTitle, sectionName, wikiConfig)
     local html = json_data.parse and json_data.parse.text and json_data.parse.text["*"]
     if not html then return nil end
 
-    -- Gallery extraction would be here, but for now we skip to keep it manageable
-
     return {
         content = htmlToMarkdown(html, wikiConfig.baseUrl),
         displayTitle = sectionInfo.line
@@ -268,8 +276,7 @@ end
 
 local function parseWikiLinks(text, wikiConfig)
     if not text then return "" end
-    -- [[Page|Label]] or [[Page]]
-    return (text:gsub("%[%[([^%]|]+)%|?([^%]]*)%]%]", function(page, label)
+    return (text:gsub("%%[%%[([^%%]|]+)%%|?([^%%]]*)%%]%%]", function(page, label)
         local display = (label ~= "" and label) or page
         local canonical = findCanonicalTitle(page, wikiConfig) or page
         local parts = {}
@@ -283,8 +290,7 @@ end
 
 local function parseTemplates(text, wikiConfig)
     if not text then return "" end
-    -- {{Template|Param}}
-    return (text:gsub("{{([^%|%s}]+)%|?([^}]*)}}", function(templateName, param)
+    return (text:gsub("{{([^%%|%%s}]+)%%|?([^}]*)}}", function(templateName, param)
         local canonical = findCanonicalTitle(templateName, wikiConfig)
         if not canonical then return "I don't know." end
 

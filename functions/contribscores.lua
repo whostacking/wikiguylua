@@ -34,7 +34,7 @@ local function getContributionScores(wikiConfig)
 
         if user then
             local stats = {}
-            for stat in row:gmatch('>([%d,]+)%s*</td>') do
+            for stat in row:gmatch('>([%%d,]+)%%s*</td>') do
                 table.insert(stats, stat)
             end
 
@@ -55,7 +55,8 @@ local function getContributionScores(wikiConfig)
         }
     end
 
-    local dataSummary = "## Edit leaderboard for [" .. wikiConfig.name .. " Wiki](" .. wikiConfig.articlePath .. "Special:ContributionScores) <:" .. wikiConfig.name .. ":" .. wikiConfig.emoji .. ">\n"
+    local emojiName = wikiConfig.name:gsub("[^A-Za-z0-9]", "_")
+    local dataSummary = "## Edit leaderboard for [" .. wikiConfig.name .. " Wiki](" .. wikiConfig.articlePath .. "Special:ContributionScores) <:" .. emojiName .. ":" .. wikiConfig.emoji .. ">\n"
     dataSummary = dataSummary .. "-# Top 10 users over the past 7 days\n\n"
 
     local maxScoreLength = 1

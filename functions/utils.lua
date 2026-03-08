@@ -32,7 +32,7 @@ local function url_encode(str)
     if str then
         str = tostring(str)
         str = str:gsub("\n", "\r\n")
-        str = str:gsub("([^%w %-%_%.%~])", function(c)
+        str = str:gsub("([^A-Za-z0-9%%-%%_%%.%%~])", function(c)
             return ("%%%02X"):format(string.byte(c))
         end)
         str = str:gsub(" ", "+")
@@ -44,7 +44,7 @@ end
 local function url_path_encode(str)
     if str then
         str = tostring(str)
-        str = str:gsub("([^%w %-%_%.%~])", function(c)
+        str = str:gsub("([^A-Za-z0-9%%-%%_%%.%%~])", function(c)
             return ("%%%02X"):format(string.byte(c))
         end)
         str = str:gsub(" ", "%%20")

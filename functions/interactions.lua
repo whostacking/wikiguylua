@@ -13,9 +13,12 @@ local mapOrder = {}
 local function pruneMap(maxSize)
     maxSize = maxSize or 1000
     while #mapOrder > maxSize do
-        local oldestKey = table.remove(mapOrder, 1)
-        responseMap[oldestKey] = nil
-        botToAuthorMap[oldestKey] = nil
+        local oldestUserId = table.remove(mapOrder, 1)
+        local botMsgId = responseMap[oldestUserId]
+        if botMsgId then
+            botToAuthorMap[botMsgId] = nil
+        end
+        responseMap[oldestUserId] = nil
     end
 end
 
@@ -54,10 +57,10 @@ end
 local function getAutocompleteChoices(wikiConfig, listType, prefix)
     local isFileSearch = listType == 'allimages'
     local namespace = isFileSearch and '6' or '0'
-    local searchPrefix = prefix:gsub("^%s*(.-)%s*$", "%1")
+    local searchPrefix = prefix:gsub("^%%s*(.-)%%s*$", "%%1")
 
     if isFileSearch and searchPrefix:lower():find("^file:") then
-        searchPrefix = searchPrefix:sub(6):gsub("^%s*(.-)%s*$", "%1")
+        searchPrefix = searchPrefix:sub(6):gsub("^%%s*(.-)%%s*$", "%%1")
     end
 
     if searchPrefix == '' then
@@ -137,8 +140,8 @@ local function handleUserRequest(wikiConfig, rawPageName, messageOrInteraction, 
     if rawPageName:find("#") then
         local parts = {}
         for part in rawPageName:gmatch("[^#]+") do table.insert(parts, part) end
-        rawPageName = parts[1]:gsub("^%s*(.-)%s*$", "%1")
-        sectionName = parts[2] and parts[2]:gsub("^%s*(.-)%s*$", "%1")
+        rawPageName = parts[1]:gsub("^%%s*(.-)%%s*$", "%%1")
+        sectionName = parts[2] and parts[2]:gsub("^%%s*(.-)%%s*$", "%%1")
     end
 
     local content = nil
@@ -197,9 +200,16 @@ local function handleInteraction(interaction)
     if interaction.type == 4 then -- Autocomplete
         local commandName = interaction.data.name
         if commandName == 'parse' or commandName == 'wiki' then
+            local optionsList = interaction.data.options
+            if commandName == 'parse' and optionsList and optionsList[1] then
+                optionsList = optionsList[1].options
+            end
+
+            if not optionsList then return end
+
             local focusedOption = nil
             local wikiKey = nil
-            for _, opt in ipairs(interaction.data.options) do
+            for _, opt in ipairs(optionsList) do
                 if opt.name == 'wiki' then wikiKey = opt.value end
                 if opt.focused then focusedOption = opt end
             end
@@ -286,5 +296,6 @@ return {
     buildPageEmbed = buildPageEmbed,
     responseMap = responseMap,
     botToAuthorMap = botToAuthorMap,
-    trackResponse = trackResponse
+    trackResponse = trackResponse,
+    pruneMap = pruneMap
 }

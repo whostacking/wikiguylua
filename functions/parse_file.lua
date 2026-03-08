@@ -1,5 +1,4 @@
 local utils = require("./utils")
-local config = require("../config")
 
 local function handleFileRequest(wikiConfig, fileName, interaction)
     local searchTitle = fileName
